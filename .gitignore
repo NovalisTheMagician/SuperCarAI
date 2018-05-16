@@ -4,3 +4,6 @@ libs/
 .classpath
 .project
 ai.jar
+native/
+ai_libs.jar
+alt_ai.jar
