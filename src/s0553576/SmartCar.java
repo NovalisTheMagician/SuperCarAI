@@ -13,7 +13,7 @@ public class SmartCar extends AI
 	
 	private static final float TARGET_RADIUS = 1;
 	private static final float BREAK_RADIUS = 20;
-	private static final float BREAK_ANGLE = (float)Math.toRadians(30);
+	private static final float BREAK_ANGLE = (float)Math.toRadians(15);
 	
 	public SmartCar(Info info) 
 	{
@@ -46,6 +46,8 @@ public class SmartCar extends AI
 		float acceleration = arrive(carPosition, targetPosition, currentVelocity);
 		
 		float angAcceleration = align(carOrientation, targetOrientation, info.getAngularVelocity());
+		
+		System.out.println(angAcceleration);
 		
 		return new DriverAction(acceleration, angAcceleration);
 	}
@@ -83,35 +85,39 @@ public class SmartCar extends AI
 	private float align(float sourceOri, float targetOri, float currentAngularVel)
 	{
 		float angle = targetOri - sourceOri;
-		if(angle > Math.PI)
-			angle = ((float)Math.PI * 2) - angle;
-		if(angle < -Math.PI)
-			angle = ((float)Math.PI * 2) + angle;
+		angle = mapRotation(angle);
+		float absAng = Math.abs(angle);
 		
 		float angularVel = 0;
 		float angularAcc = 0;
 		
 		float wunschZeit = 1f;
 		
-		if(Math.abs(angle) < 0.01f)
+		if(absAng < Math.toRadians(1))
 		{
 			return 0;
 		}
 		
-		if(Math.abs(angle) <= BREAK_ANGLE)
+		if(absAng <= BREAK_ANGLE)
 		{
 			float factor = MAX_ANGULAR_VELOCITY / BREAK_ANGLE;
-			angularVel = angle * factor;
+			angularVel = absAng * factor;
 		}
 		else
 		{
-			// preserve the direction of rotation by taking the sign of the angle
-			angularVel = Math.signum(angle) * MAX_ANGULAR_VELOCITY;
+			angularVel = MAX_ANGULAR_VELOCITY;
 		}
+		
+		angularVel *= angle / absAng; 
 		
 		angularAcc = (angularVel - currentAngularVel) / wunschZeit;
 		
 		return angularAcc;
+	}
+	
+	private float mapRotation(float rot)
+	{
+		return Vector.constrainAngle(rot);
 	}
 	
 	@Override

@@ -72,9 +72,9 @@ public class Vector
 	
 	public static float constrainAngle(float angle)
     {
-        if (angle > Math.PI)
+        while (angle >= Math.PI)
             angle -= (float)Math.PI * 2;
-        if (angle < -Math.PI)
+        while (angle <= -Math.PI)
             angle += (float)Math.PI * 2;
 
         return angle;
