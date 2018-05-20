@@ -4,6 +4,7 @@ import lenz.htw.ai4g.ai.*;
 import static org.lwjgl.opengl.GL11.*;
 
 import java.awt.Polygon;
+import java.awt.geom.Line2D;
 
 public class SmartCar extends AI 
 {
@@ -17,8 +18,12 @@ public class SmartCar extends AI
 	private static final float BREAK_RADIUS = 20;
 	private static final float BREAK_ANGLE = (float)Math.toRadians(15);
 	
+	private static final float LOOK_AHEAD = 10;
+	private static final float AVOID_DISTANCE = 0;
+	
 	private Vector[] obstaclesCenter;
 	private float[] obstaclesRadius;
+	private Polygon[] obstacles;
 	
 	public SmartCar(Info info) 
 	{
@@ -32,13 +37,13 @@ public class SmartCar extends AI
 		MAX_ANGULAR_VELOCITY = info.getMaxAngularVelocity();
 		
 		Polygon[] obstacles = info.getTrack().getObstacles();
-		int numObstacles = obstacles.length;
+		int numObstacles = obstacles.length - 2;
 		
 		obstaclesCenter = new Vector[numObstacles];
 		obstaclesRadius = new float[numObstacles];
 		for(int i = 0; i < numObstacles; ++i)
 		{
-			Vector[] points = createPointList(obstacles[i]);
+			Vector[] points = createPointList(obstacles[i+2]);
 			obstaclesCenter[i] = getObstacleCenter(points);
 			obstaclesRadius[i] = getObstacleRadius(points);
 		}
@@ -59,6 +64,19 @@ public class SmartCar extends AI
 		
 		Vector targetPosition = new Vector(info.getCurrentCheckpoint().x, info.getCurrentCheckpoint().y);
 		float targetOrientation = Vector.sub(targetPosition, carPosition).angle();
+		
+		float targetDistance = Vector.sub(targetPosition, carPosition).length();
+		
+		if(targetDistance > 30)
+		{
+			Vector carDirection = Vector.normalize(new Vector(info.getVelocity()));
+			Vector newTarget = checkCollision(carPosition, carDirection, LOOK_AHEAD, AVOID_DISTANCE);
+			if(newTarget != null)
+			{
+				targetPosition = newTarget;
+				targetOrientation = Vector.sub(targetPosition, carPosition).angle();
+			}
+		}
 		
 		float currentVelocity = new Vector(info.getVelocity()).length();
 		float acceleration = arrive(carPosition, targetPosition, currentVelocity);
@@ -131,6 +149,22 @@ public class SmartCar extends AI
 		return angularAcc;
 	}
 	
+	private Vector checkCollision(Vector currentPos, Vector direction, float lookahead, float avoidDistance)
+	{
+		Vector futurePoint = Vector.add(currentPos, Vector.scale(direction, lookahead));
+		for(int i = 0; i < obstaclesCenter.length; ++i)
+		{
+			Vector center = obstaclesCenter[i];
+			float radius = obstaclesRadius[i];
+			if(Vector.sub(center, futurePoint).length() <= radius)
+			{
+				Vector dir = Vector.normalize(Vector.sub(futurePoint, center));
+				return Vector.add(center, Vector.scale(dir, radius + avoidDistance));
+			}
+		}
+		return null;
+	}
+	
 	private Vector getObstacleCenter(Vector[] points)
 	{
 		Vector center = Vector.ZERO;
@@ -160,7 +194,7 @@ public class SmartCar extends AI
 		}
 		
 		Vector diagonal = Vector.sub(min, max);
-		return diagonal.length() / 2.0f;
+		return diagonal.length() / 2f;
 	}
 	
 	private Vector[] createPointList(Polygon poly)
@@ -199,7 +233,17 @@ public class SmartCar extends AI
 		float tarX = info.getCurrentCheckpoint().x;
 		float tarY = info.getCurrentCheckpoint().y;
 		
+		Vector dir = Vector.normalize(new Vector(info.getVelocity()));
+		float lookAheadX = posX + dir.x * LOOK_AHEAD;
+		float lookAheadY = posY + dir.y * LOOK_AHEAD;
+		
 		glLineWidth(2.5f);
+		
+		glBegin(GL_LINES);
+		glColor3f(1, 1, 0);
+		glVertex2f(posX, posY);
+		glVertex2f(lookAheadX, lookAheadY);
+		glEnd();
 		
 		glBegin(GL_LINES);
 		glColor3f(1, 0, 0);

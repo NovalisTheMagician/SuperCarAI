@@ -57,6 +57,11 @@ public class Vector
 		return lhs.x*rhs.x + lhs.y*rhs.y;
 	}
 	
+	public static Vector perp(Vector vector)
+	{
+		return new Vector(-vector.y, vector.x);
+	}
+	
 	public static float angle(Vector lhs, Vector rhs)
 	{
 		float angle = (float)Math.cos((Vector.dot(lhs, rhs)) / (lhs.length() * rhs.length()));
