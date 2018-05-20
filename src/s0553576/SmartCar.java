@@ -3,6 +3,8 @@ package s0553576;
 import lenz.htw.ai4g.ai.*;
 import static org.lwjgl.opengl.GL11.*;
 
+import java.awt.Polygon;
+
 public class SmartCar extends AI 
 {
 	
@@ -15,6 +17,9 @@ public class SmartCar extends AI
 	private static final float BREAK_RADIUS = 20;
 	private static final float BREAK_ANGLE = (float)Math.toRadians(15);
 	
+	private Vector[] obstaclesCenter;
+	private float[] obstaclesRadius;
+	
 	public SmartCar(Info info) 
 	{
 		super(info);
@@ -25,6 +30,19 @@ public class SmartCar extends AI
 		MAX_VELOCITY = info.getMaxVelocity();
 		MAX_ANGULAR_ACCELERATION = info.getMaxAngularAcceleration();
 		MAX_ANGULAR_VELOCITY = info.getMaxAngularVelocity();
+		
+		Polygon[] obstacles = info.getTrack().getObstacles();
+		int numObstacles = obstacles.length;
+		
+		obstaclesCenter = new Vector[numObstacles];
+		obstaclesRadius = new float[numObstacles];
+		for(int i = 0; i < numObstacles; ++i)
+		{
+			Vector[] points = createPointList(obstacles[i]);
+			obstaclesCenter[i] = getObstacleCenter(points);
+			obstaclesRadius[i] = getObstacleRadius(points);
+		}
+		
 	}
 
 	@Override
@@ -46,8 +64,6 @@ public class SmartCar extends AI
 		float acceleration = arrive(carPosition, targetPosition, currentVelocity);
 		
 		float angAcceleration = align(carOrientation, targetOrientation, info.getAngularVelocity());
-		
-		System.out.println(angAcceleration);
 		
 		return new DriverAction(acceleration, angAcceleration);
 	}
@@ -113,6 +129,48 @@ public class SmartCar extends AI
 		angularAcc = (angularVel - currentAngularVel) / wunschZeit;
 		
 		return angularAcc;
+	}
+	
+	private Vector getObstacleCenter(Vector[] points)
+	{
+		Vector center = Vector.ZERO;
+		for(int i = 0; i < points.length; ++i)
+		{
+			center = Vector.add(center, points[i]);
+		}
+		return Vector.scale(center, 1.0f / points.length);
+	}
+	
+	private float getObstacleRadius(Vector[] points)
+	{
+		Vector min = new Vector(Float.MAX_VALUE, Float.MAX_VALUE);
+		Vector max = new Vector(Float.MIN_VALUE, Float.MIN_VALUE);
+		for(int i = 0; i < points.length; ++i)
+		{
+			Vector point = points[i];
+			if(point.x < min.x)
+				min.x = point.x;
+			else if(point.x > max.x)
+				max.x = point.x;
+			
+			if(point.y < min.y)
+				min.y = point.y;
+			else if(point.y > max.y)
+				max.y = point.y;
+		}
+		
+		Vector diagonal = Vector.sub(min, max);
+		return diagonal.length() / 2.0f;
+	}
+	
+	private Vector[] createPointList(Polygon poly)
+	{
+		Vector[] points = new Vector[poly.npoints];
+		for(int i = 0; i < poly.npoints; ++i)
+		{
+			points[i] = new Vector(poly.xpoints[i], poly.ypoints[i]);
+		}
+		return points;
 	}
 	
 	private float mapRotation(float rot)
