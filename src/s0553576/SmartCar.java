@@ -18,7 +18,8 @@ public class SmartCar extends AI
 	private static final float BREAK_RADIUS = 20;
 	private static final float BREAK_ANGLE = (float)Math.toRadians(15);
 	
-	private static final float LOOK_AHEAD = 10;
+	private static final float LOOK_AHEAD = 15;
+	private static final float LOOK_SPREAD = 7;
 	private static final float AVOID_DISTANCE = 0;
 	
 	private Vector[] obstaclesCenter;
@@ -28,8 +29,7 @@ public class SmartCar extends AI
 	public SmartCar(Info info) 
 	{
 		super(info);
-		//this.enlistForDevelopment();
-		this.enlistForTournament(553576, 554133);
+		//this.enlistForTournament(553576, 554133);
 		
 		MAX_ACCELERATION = info.getMaxAcceleration();
 		MAX_VELOCITY = info.getMaxVelocity();
@@ -70,7 +70,7 @@ public class SmartCar extends AI
 		if(targetDistance > 30)
 		{
 			Vector carDirection = Vector.normalize(new Vector(info.getVelocity()));
-			Vector newTarget = checkCollision(carPosition, carDirection, LOOK_AHEAD, AVOID_DISTANCE);
+			Vector newTarget = checkCollision(carPosition, carDirection, AVOID_DISTANCE);
 			if(newTarget != null)
 			{
 				targetPosition = newTarget;
@@ -149,17 +149,30 @@ public class SmartCar extends AI
 		return angularAcc;
 	}
 	
-	private Vector checkCollision(Vector currentPos, Vector direction, float lookahead, float avoidDistance)
+	private Vector checkCollision(Vector currentPos, Vector direction, float avoidDistance)
 	{
-		Vector futurePoint = Vector.add(currentPos, Vector.scale(direction, lookahead));
+		Vector perpDir = Vector.scale(Vector.perp(direction), LOOK_SPREAD);
+		Vector dir = Vector.scale(direction, LOOK_AHEAD);
+		
+		Vector futurePoint1 = Vector.add(currentPos, Vector.add(dir, perpDir));
+		Vector futurePoint2 = Vector.add(currentPos, Vector.sub(dir, perpDir));
 		for(int i = 0; i < obstaclesCenter.length; ++i)
 		{
 			Vector center = obstaclesCenter[i];
 			float radius = obstaclesRadius[i];
-			if(Vector.sub(center, futurePoint).length() <= radius)
+			
+			boolean goLeft = (Vector.sub(center, futurePoint1).length() <= radius);
+			boolean goRight = (Vector.sub(center, futurePoint2).length() <= radius);
+			
+			if(goLeft)
 			{
-				Vector dir = Vector.normalize(Vector.sub(futurePoint, center));
-				return Vector.add(center, Vector.scale(dir, radius + avoidDistance));
+				Vector newDir = Vector.normalize(Vector.sub(futurePoint1, center));
+				return Vector.add(center, Vector.scale(newDir, radius + avoidDistance));
+			}
+			else if(goRight)
+			{
+				Vector newDir = Vector.normalize(Vector.sub(futurePoint2, center));
+				return Vector.add(center, Vector.scale(newDir, radius + avoidDistance));
 			}
 		}
 		return null;
@@ -234,15 +247,27 @@ public class SmartCar extends AI
 		float tarY = info.getCurrentCheckpoint().y;
 		
 		Vector dir = Vector.normalize(new Vector(info.getVelocity()));
-		float lookAheadX = posX + dir.x * LOOK_AHEAD;
-		float lookAheadY = posY + dir.y * LOOK_AHEAD;
+		
+		Vector perpDir = Vector.perp(dir);
+		
+		float lookAhead1X = posX + (dir.x * LOOK_AHEAD) + (perpDir.x * LOOK_SPREAD);
+		float lookAhead1Y = posY + (dir.y * LOOK_AHEAD) + (perpDir.y * LOOK_SPREAD);
+		
+		float lookAhead2X = posX + (dir.x * LOOK_AHEAD) - (perpDir.x * LOOK_SPREAD);
+		float lookAhead2Y = posY + (dir.y * LOOK_AHEAD) - (perpDir.y * LOOK_SPREAD);
 		
 		glLineWidth(2.5f);
 		
 		glBegin(GL_LINES);
 		glColor3f(1, 1, 0);
 		glVertex2f(posX, posY);
-		glVertex2f(lookAheadX, lookAheadY);
+		glVertex2f(lookAhead1X, lookAhead1Y);
+		glEnd();
+		
+		glBegin(GL_LINES);
+		glColor3f(1, 1, 0);
+		glVertex2f(posX, posY);
+		glVertex2f(lookAhead2X, lookAhead2Y);
 		glEnd();
 		
 		glBegin(GL_LINES);
