@@ -8,7 +8,6 @@ import java.awt.geom.Line2D;
 
 public class SmartCar extends AI 
 {
-	
 	private final float MAX_ACCELERATION;
 	private final float MAX_VELOCITY;
 	private final float MAX_ANGULAR_ACCELERATION;

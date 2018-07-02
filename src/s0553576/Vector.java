@@ -84,4 +84,14 @@ public class Vector
 
         return angle;
     }
+	
+	@Override
+	public boolean equals(Object other)
+	{
+		if(other == null)
+			return false;
+		
+		Vector vec = (Vector)other;
+		return this.x == vec.x && this.y == vec.y;
+	}
 }

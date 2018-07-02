@@ -3,20 +3,20 @@ package s0553576;
 import lenz.htw.ai4g.ai.*;
 import static org.lwjgl.opengl.GL11.*;
 
+import java.awt.Polygon;
+
 public class PathCar extends AI 
 {
-	
-	private final float MAX_ACCELERATION;
 	private final float MAX_VELOCITY;
-	private final float MAX_ANGULAR_ACCELERATION;
 	private final float MAX_ANGULAR_VELOCITY;
 	
 	private static final float TARGET_RADIUS = 1;
 	private static final float BREAK_RADIUS = 30;
 	private static final float BREAK_ANGLE = (float)Math.toRadians(15);
 	
-	private int trackWidth;
-	private int trackHeight;
+	private static final int DIVISIONS = 30;
+	
+	private AStar astar;
 	
 	private Vector[] path;
 	private int currentNode;
@@ -26,22 +26,18 @@ public class PathCar extends AI
 		super(info);
 		this.enlistForTournament(553576, 554133);
 		
-		trackWidth = info.getTrack().getWidth();
-		trackHeight = info.getTrack().getHeight();
+		int trackWidth = info.getTrack().getWidth();
+		int trackHeight = info.getTrack().getHeight();
 		
-		MAX_ACCELERATION = info.getMaxAcceleration();
+		Polygon[] obstacles = info.getTrack().getObstacles();
+		Polygon[] boosts = info.getTrack().getFastZones();
+		Polygon[] slows = info.getTrack().getSlowZones();
+		
+		astar = new AStar();
+		astar.createGraph(obstacles, boosts, slows, DIVISIONS, trackWidth, trackHeight);
+		
 		MAX_VELOCITY = info.getMaxVelocity();
-		MAX_ANGULAR_ACCELERATION = info.getMaxAngularAcceleration();
 		MAX_ANGULAR_VELOCITY = info.getMaxAngularVelocity();
-		
-		path = new Vector[6];
-		
-		path[0] = new Vector(700, 700);
-		path[1] = new Vector(700, 300);
-		path[2] = new Vector(500, 500);
-		path[3] = new Vector(300, 300);
-		path[4] = new Vector(300, 700);
-		path[5] = new Vector(500, 500);
 		
 		currentNode = 0;
 	}
@@ -52,18 +48,45 @@ public class PathCar extends AI
 		return "Fraylin Boons";
 	}
 
+	boolean calcPath = true;
+	Vector lastGoal = null;
+	boolean goToGoal = false;
+	
 	@Override
 	public DriverAction update(boolean wasResetAfterCollision) 
 	{
 		Vector carPosition = new Vector(info.getX(), info.getY());
 		float carOrientation = info.getOrientation();
 		
-		float dist = Vector.sub(carPosition, path[currentNode]).length();
-		if(dist <= 10)
-			currentNode = (currentNode + 1) % path.length;
+		Vector goalPosition = new Vector(info.getCurrentCheckpoint().x, info.getCurrentCheckpoint().y);
+		if(!goalPosition.equals(lastGoal))
+			calcPath = true;
+		lastGoal = goalPosition;
+
+		if(wasResetAfterCollision || calcPath)
+		{
+			path = astar.getPath(carPosition, goalPosition);
+			calcPath = false;
+			goToGoal = false;
+			currentNode = 0;
+		}
 		
-		//Vector targetPosition = new Vector(info.getCurrentCheckpoint().x, info.getCurrentCheckpoint().y);
-		Vector targetPosition = path[currentNode];
+		if(!goToGoal)
+		{
+			float dist = Vector.sub(carPosition, path[currentNode]).length();
+			if(dist <= astar.getCellWidth())
+				currentNode = (currentNode + 1);
+		}
+		
+		Vector targetPosition = null;
+		if(currentNode == path.length)
+		{
+			targetPosition = goalPosition;
+			goToGoal = true;
+		}
+		else
+			targetPosition = path[currentNode];
+		
 		float targetOrientation = Vector.sub(targetPosition, carPosition).angle();
 		
 		float currentVelocity = new Vector(info.getVelocity()).length();
@@ -163,10 +186,6 @@ public class PathCar extends AI
 		float tarX = info.getCurrentCheckpoint().x;
 		float tarY = info.getCurrentCheckpoint().y;
 		
-		Vector dir = Vector.normalize(new Vector(info.getVelocity()));
-		
-		Vector perpDir = Vector.perp(dir);
-		
 		glLineWidth(2.5f);
 		
 		glBegin(GL_LINES);
@@ -187,25 +206,83 @@ public class PathCar extends AI
 		glVertex2f(tarX, tarY);
 		glEnd();
 		
-		glBegin(GL_LINES);
-		glColor3f(1, 1, 0);
-		glVertex2f(0, 0);
-		glColor3f(1, 0, 0);
-		glVertex2f(trackWidth, trackHeight);
-		glEnd();
+		drawGLCircle(new Vector(posX, posY), 10, 0, 1, 1);
+		
+		float cellWidth = astar.getCellWidth();
+		float cellHeight = astar.getCellHeight();
+		
+		int[][] graph = astar.getGraphArray();
+		
+		
+		//glBegin(GL_LINES);
+		for(int y = 0; y < DIVISIONS; ++y)
+		{
+			for(int x = 0; x < DIVISIONS; ++x)
+			{
+				float xPos = x * cellWidth;
+				float yPos = y * cellHeight;
+				
+				if(graph[x][y] == AStar.OBSTACLE_COST)
+				{
+					glBegin(GL_TRIANGLES);
+					glColor3f(1, 0, 0);
+					glVertex2f(xPos, yPos);
+					glVertex2f(xPos + cellWidth, yPos);
+					glVertex2f(xPos, yPos + cellHeight);
+					
+					glVertex2f(xPos + cellWidth, yPos + cellHeight);
+					glVertex2f(xPos, yPos + cellHeight);
+					glVertex2f(xPos + cellWidth, yPos);
+					glEnd();
+				}
+				else if(graph[x][y] == AStar.BOOST_COST)
+				{
+					glBegin(GL_TRIANGLES);
+					glColor3f(0, 0, 1);
+					glVertex2f(xPos, yPos);
+					glVertex2f(xPos + cellWidth, yPos);
+					glVertex2f(xPos, yPos + cellHeight);
+					
+					glVertex2f(xPos + cellWidth, yPos + cellHeight);
+					glVertex2f(xPos, yPos + cellHeight);
+					glVertex2f(xPos + cellWidth, yPos);
+					glEnd();
+				}
+				else if(graph[x][y] == AStar.SLOW_COST)
+				{
+					glBegin(GL_TRIANGLES);
+					glColor3f(1, 0.3f, 0.3f);
+					glVertex2f(xPos, yPos);
+					glVertex2f(xPos + cellWidth, yPos);
+					glVertex2f(xPos, yPos + cellHeight);
+					
+					glVertex2f(xPos + cellWidth, yPos + cellHeight);
+					glVertex2f(xPos, yPos + cellHeight);
+					glVertex2f(xPos + cellWidth, yPos);
+					glEnd();
+				}
+				
+				glBegin(GL_LINES);
+				glColor3f(0.5f, 1f, 0.5f);
+				glVertex2f(xPos, yPos);
+				glVertex2f(xPos + cellWidth, yPos);
+				glVertex2f(xPos, yPos);
+				glVertex2f(xPos, yPos + cellHeight);
+				glEnd();
+			}
+		}
+		//glEnd();
 		
 		glBegin(GL_LINES);
 		glColor3f(0.5f, 0, 0.5f);
-		for(int i = 0; i < path.length; ++i)
+		for(int i = 0; i < path.length-1; ++i)
 		{
 			Vector a = path[i];
-			Vector b = path[(i + 1) % path.length];
+			Vector b = path[(i + 1)];
 			glVertex2f(a.x, a.y);
 			glVertex2f(b.x, b.y);
 		}
 		glEnd();
-		
-		drawGLCircle(new Vector(posX, posY), 10, 0, 1, 1);
 	}
 	
 	private void drawGLCircle(Vector position, float radius, float r, float g, float b)
